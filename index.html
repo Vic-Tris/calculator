@@ -14,6 +14,9 @@
     <!-- Top Header Bar with Mode Toggle -->
     <div class="header-actions">
         <span id="page-title">Standard</span>
+        <button class="icon-btn mic-btn" id="micBtn" onclick="toggleVoiceInput()" title="Voice Control">
+            🎤
+        </button>
         <button class="icon-btn" onclick="openPopupPage()" title="Open Info / Extra Page">
                 &#9881; <!-- Gear / Info Icon -->
             </button>
@@ -150,36 +153,91 @@
 
     </div>
 </div>
-<!-- Date Calculator Pop-up Page -->
+
+<!-- Multi-Tool Pop-up Page -->
 <div class="popup-overlay" id="popupOverlay">
     <div class="popup-content">
         <div class="popup-header">
-            <h2>📅 Date Calculator</h2>
-            <!-- Redirect back icon button -->
+            <h2>⚙️ Smart Utilities</h2>
             <button class="icon-btn close-btn" onclick="closePopupPage()" title="Back to Calculator">
                 &#10006;
             </button>
         </div>
-        <div class="popup-body">
-            <p style="margin-bottom: 12px; font-size: 0.85rem; color: #94a3b8;">
-                Calculate a future or past date relative to today.
-            </p>
 
-            <div class="date-input-group">
-                <input type="number" id="daysInput" placeholder="e.g. 120" oninput="calculateFutureDate()" />
-                <span class="input-suffix">Days</span>
+        <!-- Utility Navigation Tabs -->
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('date-tab', this)">Days Ahead</button>
+            <button class="tab-btn" onclick="switchTab('age-tab', this)">Age / Diff</button>
+            <button class="tab-btn" onclick="switchTab('time-tab', this)">World Clock</button>
+        </div>
+
+        <div class="popup-body">
+            <!-- TAB 1: Days Ahead / Past Calculator -->
+            <div class="tab-content active" id="date-tab">
+                <p style="margin-bottom: 12px; font-size: 0.85rem; color: #94a3b8;">
+                    Calculate target date relative to today.
+                </p>
+                <div class="date-input-group">
+                    <input type="number" id="daysInput" placeholder="e.g. 120" oninput="calculateFutureDate()" />
+                    <span class="input-suffix">Days</span>
+                </div>
+                <div class="date-result-card">
+                    <span class="result-label">Calculated Target Date</span>
+                    <div class="result-main" id="resultMain">Enter number of days</div>
+                    <div class="result-sub" id="resultSub">Today: --</div>
+                </div>
             </div>
 
-            <!-- Result Card -->
-            <div class="date-result-card" id="dateResultCard">
-                <span class="result-label">Calculated Date:</span>
-                <div class="result-main" id="resultMain">Select or enter days</div>
-                <div class="result-sub" id="resultSub">Today: --</div>
+            <!-- TAB 2: Age / Date Difference Calculator -->
+            <div class="tab-content" id="age-tab">
+                <p style="margin-bottom: 12px; font-size: 0.85rem; color: #94a3b8;">
+                    Select start & end date (or birthdate).
+                </p>
+                <div class="date-picker-group">
+                    <label>From:</label>
+                    <input type="date" id="startDate" onchange="calculateDateDifference()" />
+                </div>
+                <div class="date-picker-group">
+                    <label>To:</label>
+                    <input type="date" id="endDate" onchange="calculateDateDifference()" />
+                </div>
+                <div class="date-result-card">
+                    <span class="result-label">Elapsed Difference</span>
+                    <div class="result-main" id="diffResultMain">Select dates above</div>
+                    <div class="result-sub" id="diffResultSub">Years, Months & Days</div>
+                </div>
+            </div>
+
+            <!-- TAB 3: World Clock / Time Zone Converter -->
+            <div class="tab-content" id="time-tab">
+                <p style="margin-bottom: 12px; font-size: 0.85rem; color: #94a3b8;">
+                    Live time across major world time zones.
+                </p>
+                <div class="world-clock-grid">
+                    <div class="clock-item">
+                        <span class="city-name">New York (EST/EDT)</span>
+                        <span class="time-display" id="clock-ny">--:--:--</span>
+                    </div>
+                    <div class="clock-item">
+                        <span class="city-name">London (GMT/BST)</span>
+                        <span class="time-display" id="clock-london">--:--:--</span>
+                    </div>
+                    <div class="clock-item">
+                        <span class="city-name">Tokyo (JST)</span>
+                        <span class="time-display" id="clock-tokyo">--:--:--</span>
+                    </div>
+                    <div class="clock-item">
+                        <span class="city-name">Sydney (AEST)</span>
+                        <span class="time-display" id="clock-sydney">--:--:--</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 <script src="script/cal.js"></script>
+<script src="script/date.js"></script>
+<script src="script/voice.js"></script>
 </body>
 
 </html>
