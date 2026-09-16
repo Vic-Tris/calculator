@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animated Neon Calculator</title>
+    <link rel="stylesheet" href="./css/cal.css">
+    <link rel="stylesheet" href="./css/date.css">
+</head>
+<body>
+
+<div class="glow-bg"></div>
+<div class="calculator">
+    <!-- Top Header Bar with Mode Toggle -->
+    <div class="header-actions">
+        <span id="page-title">Standard</span>
+        <button class="icon-btn" onclick="openPopupPage()" title="Open Info / Extra Page">
+                &#9881; <!-- Gear / Info Icon -->
+            </button>
+        <button class="toggle-btn" onclick="nextMode()">Mode &#8644;</button>
+    </div>
+
+    <div class="display-container">
+        <input type="text" class="display" id="display" disabled placeholder="0">
+    </div>
+
+    <!-- Page Wrapper for Transitions -->
+    <div class="pages-wrapper" id="pages-wrapper">
+        
+        <!-- Page 1: Standard Calculator -->
+        <div class="page" id="page-1">
+            <div class="keypad">
+                <button class="clear" onclick="clearDisplay()">C</button>
+                <button class="clear" onclick="deleteLast()">DEL</button>
+                <button class="operator" onclick="calculateSquareRoot()">&radic;</button>
+                <button class="operator" onclick="calculatePercentage()">%</button>
+
+                <button class="operator" onclick="appendValue('**')">x&#x207F;</button>
+                <button class="operator" onclick="appendValue('/')">&divide;</button>
+                <button class="operator" onclick="appendValue('*')">&times;</button>
+                <button class="operator" onclick="appendValue('-')">-</button>
+
+                <button onclick="appendValue('7')">7</button>
+                <button onclick="appendValue('8')">8</button>
+                <button onclick="appendValue('9')">9</button>
+                <button class="operator" onclick="appendValue('+')">+</button>
+
+                <button onclick="appendValue('4')">4</button>
+                <button onclick="appendValue('5')">5</button>
+                <button onclick="appendValue('6')">6</button>
+                <button class="operator" onclick="appendValue('.')">.</button>
+
+                <button onclick="appendValue('1')">1</button>
+                <button onclick="appendValue('2')">2</button>
+                <button onclick="appendValue('3')">3</button>
+                <button class="equal" style="grid-row: span 2; height: 100%;" onclick="calculate()">=</button>
+
+                <button onclick="appendValue('0')" style="grid-column: span 3;">0</button>
+            </div>
+        </div>
+
+        <!-- Page 2: Advanced Functions / Scientific Page -->
+        <div class="page" id="page-2">
+            <div class="scientific-toolbar">
+                <button class="mode-button" id="angle-mode" onclick="toggleAngleMode()">DEG</button>
+                <button class="operator" onclick="appendValue('(')">(</button>
+                <button class="operator" onclick="appendValue(')')">)</button>
+                <button class="operator" onclick="appendValue('Math.PI')">&pi;</button>
+                <button class="operator" onclick="appendValue('Math.E')">e</button>
+            </div>
+            <div class="scientific-keypad">
+                <button class="clear" onclick="clearDisplay()">C</button>
+                <button class="clear" onclick="deleteLast()">DEL</button>
+                <button class="operator" onclick="toggleSign()">&plusmn;</button>
+                <button class="operator" onclick="calculatePercentage()">%</button>
+                <button class="operator" onclick="calculateReciprocal()">1/x</button>
+
+                <button class="operator" onclick="appendMathFunc('sin')">sin</button>
+                <button class="operator" onclick="appendMathFunc('cos')">cos</button>
+                <button class="operator" onclick="appendMathFunc('tan')">tan</button>
+                <button class="operator" onclick="appendMathFunc('asin')">sin<sup>-1</sup></button>
+                <button class="operator" onclick="appendMathFunc('acos')">cos<sup>-1</sup></button>
+
+                <button class="operator" onclick="appendMathFunc('atan')">tan<sup>-1</sup></button>
+                <button class="operator" onclick="appendMathFunc('log10')">log</button>
+                <button class="operator" onclick="appendMathFunc('ln')">ln</button>
+                <button class="operator" onclick="appendMathFunc('sqrt')">&radic;</button>
+                <button class="operator" onclick="appendMathFunc('abs')">|x|</button>
+
+                <button class="operator" onclick="calculateSquare()">x&sup2;</button>
+                <button class="operator" onclick="calculateCube()">x&sup3;</button>
+                <button class="operator" onclick="calculateFactorial()">n!</button>
+                <button class="operator" onclick="appendValue('**')">x<sup>y</sup></button>
+                <button class="operator" onclick="appendValue('/')">&divide;</button>
+
+                <button onclick="appendValue('7')">7</button>
+                <button onclick="appendValue('8')">8</button>
+                <button onclick="appendValue('9')">9</button>
+                <button class="operator" onclick="appendValue('*')">&times;</button>
+                <button class="operator" onclick="appendValue('-')">-</button>
+
+                <button onclick="appendValue('4')">4</button>
+                <button onclick="appendValue('5')">5</button>
+                <button onclick="appendValue('6')">6</button>
+                <button onclick="appendValue('+')">+</button>
+                <button class="equal" style="grid-row: span 2; height: 100%;" onclick="calculate()">=</button>
+
+                <button onclick="appendValue('1')">1</button>
+                <button onclick="appendValue('2')">2</button>
+                <button onclick="appendValue('3')">3</button>
+                <button onclick="appendValue('.')">.</button>
+
+                <button onclick="appendValue('0')" style="grid-column: span 3;">0</button>
+            </div>
+        </div>
+
+        <!-- Mode 3: Unit Converter Page -->
+        <div class="page" id="page-3">
+            <div class="keypad">
+                <button class="operator" style="grid-column: span 2;" onclick="convertCtoF()">&deg;C &rarr; &deg;F</button>
+                <button class="operator" style="grid-column: span 2;" onclick="convertFtoC()">&deg;F &rarr; &deg;C</button>
+
+                <button class="operator" style="grid-column: span 2;" onclick="convertKmToMiles()">Km &rarr; Miles</button>
+                <button class="operator" style="grid-column: span 2;" onclick="convertMilesToKm()">Miles &rarr; Km</button>
+
+                <button class="operator" style="grid-column: span 2;" onclick="convertKgToLbs()">Kg &rarr; Lbs</button>
+                <button class="operator" style="grid-column: span 2;" onclick="convertLbsToKg()">Lbs &rarr; Kg</button>
+
+                <button class="clear" style="grid-column: span 4;" onclick="clearDisplay()">C</button>
+
+                
+                <button onclick="appendValue('7')">7</button>
+                <button onclick="appendValue('8')">8</button>
+                <button onclick="appendValue('9')">9</button>
+                <button class="operator" onclick="appendValue('+')">+</button>
+
+                <button onclick="appendValue('4')">4</button>
+                <button onclick="appendValue('5')">5</button>
+                <button onclick="appendValue('6')">6</button>
+                <button class="operator" onclick="appendValue('.')">.</button>
+
+                <button onclick="appendValue('1')">1</button>
+                <button onclick="appendValue('2')">2</button>
+                <button onclick="appendValue('3')">3</button>
+                <button class="equal" style="grid-row: span 2; height: 100%;" onclick="calculate()">=</button>
+
+                <button onclick="appendValue('0')" style="grid-column: span 3;">0</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+<!-- Date Calculator Pop-up Page -->
+<div class="popup-overlay" id="popupOverlay">
+    <div class="popup-content">
+        <div class="popup-header">
+            <h2>📅 Date Calculator</h2>
+            <!-- Redirect back icon button -->
+            <button class="icon-btn close-btn" onclick="closePopupPage()" title="Back to Calculator">
+                &#10006;
+            </button>
+        </div>
+        <div class="popup-body">
+            <p style="margin-bottom: 12px; font-size: 0.85rem; color: #94a3b8;">
+                Calculate a future or past date relative to today.
+            </p>
+
+            <div class="date-input-group">
+                <input type="number" id="daysInput" placeholder="e.g. 120" oninput="calculateFutureDate()" />
+                <span class="input-suffix">Days</span>
+            </div>
+
+            <!-- Result Card -->
+            <div class="date-result-card" id="dateResultCard">
+                <span class="result-label">Calculated Date:</span>
+                <div class="result-main" id="resultMain">Select or enter days</div>
+                <div class="result-sub" id="resultSub">Today: --</div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="script/cal.js"></script>
+</body>
+
+</html>
