@@ -158,3 +158,148 @@ function closePopupPage() {
     popup.classList.remove('active');
     stopWorldClock();
 }
+// Calculate difference dynamically on user typing or selecting dates
+function calculateDateDifference() {
+    const startVal = document.getElementById('startDate').value;
+    const endVal = document.getElementById('endDate').value;
+    const resultMain = document.getElementById('diffResultMain');
+    const resultSub = document.getElementById('diffResultSub');
+
+    // Return if either date is incomplete while typing
+    if (!startVal || !endVal) {
+        resultMain.textContent = 'Type or select both dates';
+        resultSub.textContent = 'Years, Months & Days';
+        return;
+    }
+
+    let start = new Date(startVal);
+    let end = new Date(endVal);
+
+    // Swap ordering temporarily if start date is after end date
+    let isReversed = false;
+    if (start > end) {
+        [start, end] = [end, start];
+        isReversed = true;
+    }
+
+    let years = end.getFullYear() - start.getFullYear();
+    let months = end.getMonth() - start.getMonth();
+    let days = end.getDate() - start.getDate();
+
+    // Adjust negative day balances
+    if (days < 0) {
+        months--;
+        const prevMonthLastDay = new Date(end.getFullYear(), end.getMonth(), 0).getDate();
+        days += prevMonthLastDay;
+    }
+
+    // Adjust negative month balances
+    if (months < 0) {
+        years--;
+        months += 12;
+    }
+
+    // Calculate total continuous day count
+    const totalDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+
+    // Construct output string
+    let outputStr = [];
+    if (years > 0) outputStr.push(`${years} ${years === 1 ? 'year' : 'years'}`);
+    if (months > 0) outputStr.push(`${months} ${months === 1 ? 'month' : 'months'}`);
+    if (days > 0 || outputStr.length === 0) outputStr.push(`${days} ${days === 1 ? 'day' : 'days'}`);
+
+    resultMain.textContent = outputStr.join(', ');
+    resultSub.textContent = `${isReversed ? 'Reverse Difference' : 'Total duration'}: ${totalDays.toLocaleString()} days`;
+}
+
+// Shortcut: Set input date to Today
+function setToday(inputId) {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById(inputId).value = today;
+    calculateDateDifference();
+}
+
+// Shortcut: Swap 'From' and 'To' inputs
+function swapDates() {
+    const startElem = document.getElementById('startDate');
+    const endElem = document.getElementById('endDate');
+    const temp = startElem.value;
+    startElem.value = endElem.value;
+    endElem.value = temp;
+    calculateDateDifference();
+}
+// Cache exchange rates locally to avoid redundant API network requests
+let exchangeRatesCache = null;
+
+// Fetch live currency rates and convert values
+async function convertCurrency() {
+    const amountInput = document.getElementById('currencyAmount');
+    const fromSelect = document.getElementById('fromCurrency');
+    const toSelect = document.getElementById('toCurrency');
+    const resultMain = document.getElementById('currencyResultMain');
+    const resultSub = document.getElementById('currencyResultSub');
+
+    if (!amountInput || !fromSelect || !toSelect) return;
+
+    const amount = parseFloat(amountInput.value);
+    const from = fromSelect.value;
+    const to = toSelect.value;
+
+    if (isNaN(amount) || amount <= 0) {
+        resultMain.textContent = 'Enter a valid amount';
+        resultSub.textContent = '';
+        return;
+    }
+
+    try {
+        // Fetch fresh rate matrix if not already cached
+        if (!exchangeRatesCache || exchangeRatesCache.base !== from) {
+            resultMain.textContent = 'Updating rates...';
+            const res = await fetch(`https://open.er-api.com/v6/latest/${from}`);
+            const data = await res.json();
+
+            if (data.result === 'success') {
+                exchangeRatesCache = { base: from, rates: data.rates };
+            } else {
+                throw new Error('API Rate Error');
+            }
+        }
+
+        const rate = exchangeRatesCache.rates[to];
+        if (rate) {
+            const converted = (amount * rate).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+
+            resultMain.textContent = `${converted} ${to}`;
+            resultSub.textContent = `1 ${from} = ${rate.toFixed(4)} ${to}`;
+        }
+    } catch (error) {
+        resultMain.textContent = 'Offline / Error';
+        resultSub.textContent = 'Could not fetch current exchange rate';
+    }
+}
+
+// Swap From/To currencies and trigger immediate recalculation
+function swapCurrencies() {
+    const fromSelect = document.getElementById('fromCurrency');
+    const toSelect = document.getElementById('toCurrency');
+
+    const temp = fromSelect.value;
+    fromSelect.value = toSelect.value;
+    toSelect.value = temp;
+
+    // Reset cache base so fetch loads new base rate
+    exchangeRatesCache = null;
+    convertCurrency();
+}
+
+// Automatically trigger conversion when switching to Currency Tab
+const originalSwitchTab = window.switchTab;
+window.switchTab = function(tabId) {
+    if (typeof originalSwitchTab === 'function') originalSwitchTab(tabId);
+    if (tabId === 'currency-tab') {
+        convertCurrency();
+    }
+};

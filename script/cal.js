@@ -26,18 +26,96 @@
         });
     });
 
-    function appendValue(val) {
-    if (isNewCalculation) {
-        // If typing a new number after pressing '=', clear the screen first
-        if (!isNaN(val) || val === '.') {
-            display.value = '';
+    // Append value with auto-scroll and continuous operator evaluation
+function appendValue(val) {
+    const display = document.getElementById('display');
+    const operators = ['+', '-', '*', '/', '**', '%'];
+
+    if (!display) return;
+
+    // Reset flag if user enters an operator right after a calculation
+    if (typeof isNewCalculation !== 'undefined' && isNewCalculation) {
+        if (operators.includes(val)) {
+            isNewCalculation = false; // Continue calculating with current result
+        } else {
+            display.value = ''; // Clear for fresh input
+            isNewCalculation = false;
         }
-        isNewCalculation = false;
     }
+
+    // Handle operator logic
+    if (operators.includes(val)) {
+        // Prevent leading operators except unary minus or parenthetical operators
+        if (display.value === '' && val !== '-') {
+            return;
+        }
+
+        // Check for existing trailing operators
+        const endsWithTwoCharOp = display.value.endsWith('**');
+        const lastChar = display.value.slice(-1);
+
+        // Case 1: Replace multi-character operator '**'
+        if (endsWithTwoCharOp) {
+            display.value = display.value.slice(0, -2) + val;
+            scrollToLatest();
+            return;
+        }
+
+        // Case 2: Replace single-character operator
+        if (operators.includes(lastChar)) {
+            // Allow negative sign after * or / for signed numbers (e.g., 5 * -2)
+            if (val === '-' && (lastChar === '*' || lastChar === '/')) {
+                display.value += val;
+                scrollToLatest();
+                return;
+            }
+
+            display.value = display.value.slice(0, -1) + val;
+            scrollToLatest();
+            return;
+        }
+
+        // CONTINUOUS EVALUATION: Evaluate pending expression before chaining the new operator
+        if (display.value && /[0-9)]/.test(lastChar)) {
+            try {
+                let intermediate = Function(`'use strict'; return (${display.value})`)();
+                
+                // Avoid displaying NaN or Infinity directly in continuous mode
+                if (Number.isFinite(intermediate)) {
+                    intermediate = Math.round(intermediate * 1e8) / 1e8;
+
+                    // Push intermediate step to history if function exists
+                    if (typeof addToHistory === 'function') {
+                        addToHistory(display.value, intermediate);
+                    }
+
+                    display.value = intermediate;
+                }
+            } catch (e) {
+                // If expression is invalid or incomplete (e.g. unclosed parens), maintain raw input
+            }
+        }
+    }
+
+    // Prevent multiple decimals in the same number segment
+    if (val === '.') {
+        const currentSegment = display.value.split(/[\+\-\*\/\%]/).pop();
+        if (currentSegment.includes('.')) return;
+    }
+
+    // Append the new value
     display.value += val;
-    // Reset stored repeated operation when a new input is typed manually
-    lastOperator = null;
-    lastOperand = null;
+
+    // Trigger auto-scroll to keep latest input visible
+    scrollToLatest();
+}
+
+// Helper to keep display scrolled to the far right
+function scrollToLatest() {
+    const display = document.getElementById('display');
+    if (display) {
+        display.scrollLeft = display.scrollWidth;
+    }
 }
     function clearDisplay() {
         display.value = '';
@@ -61,30 +139,91 @@
         }
     }
 
-   function calculate() {
+  /**
+ * Master Calculate Function
+ * Handles standard evaluation, continuous operator chaining, repeated equals,
+ * decimal/negative values, division by zero, floating precision cleanup, and history drawer logging.
+ */
+function calculate() {
+    const display = document.getElementById('display');
+    if (!display || !display.value.trim()) return;
+
+    let rawExpr = display.value.trim();
+
     try {
-        if (!display.value) return;
+        // 1. Map visual display symbols to valid JS math operators
+        let sanitizedExpr = rawExpr
+            .replace(/×/g, '*')
+            .replace(/÷/g, '/')
+            .replace(/−/g, '-');
 
-        let expr = display.value;
-
-        if (lastOperator !== null && lastOperand !== null) {
-            // Repeat the last operator and operand if '=' is pressed sequentially
-            expr = `${display.value} ${lastOperator} ${lastOperand}`;
+        // 2. Continuous Repeated Equals Logic (e.g., 2 + 2 = 4 -> click '=' again -> 6)
+        if (isNewCalculation && lastOperator !== null && lastOperand !== null) {
+            sanitizedExpr = `${sanitizedExpr} ${lastOperator} ${lastOperand}`;
+            rawExpr = `${display.value} ${lastOperator} ${lastOperand}`;
         } else {
-            // Capture the trailing operator and number from the expression
-            const match = expr.match(/([\+\-\*\/\*\*])\s*([0-9\.]+)$/);
+            // Trim dangling operators if user hits '=' early (e.g., "12 + " -> "12")
+            if (/[+\-*/.]$/.test(sanitizedExpr)) {
+                sanitizedExpr = sanitizedExpr.slice(0, -1);
+                if (!sanitizedExpr) return;
+            }
+
+            // Extract and save the trailing operator and operand for repeated '=' operations
+            const match = sanitizedExpr.match(/([+\-*/])\s*(-?\d*\.?\d+)$/);
             if (match) {
                 lastOperator = match[1];
                 lastOperand = match[2];
+            } else {
+                lastOperator = null;
+                lastOperand = null;
             }
         }
 
-        display.value = eval(expr);
-        triggerPulse();
+        // 3. Safely evaluate expression using Function constructor
+        let result = Function(`'use strict'; return (${sanitizedExpr})`)();
+
+        // 4. Handle Division by Zero, Infinity, and NaN errors
+        if (typeof result !== 'number' || isNaN(result) || !isFinite(result)) {
+            display.value = 'Error';
+            if (typeof triggerPulse === 'function') triggerPulse();
+            isNewCalculation = true;
+            return;
+        }
+
+        // 5. Clean up floating-point precision artifacts (e.g., 0.1 + 0.2 = 0.3)
+        result = Math.round(result * 100000000) / 100000000;
+
+        // 6. Save calculation entry to History Drawer
+        if (typeof addToHistory === 'function') {
+            addToHistory(rawExpr, result);
+        }
+
+        // 7. Update Display UI and trigger visual/haptic feedback
+        display.value = result.toString();
+
+        if (typeof scrollToLatest === 'function') {
+            scrollToLatest();
+        }
+
+        if (typeof triggerPulse === 'function') {
+            triggerPulse();
+        }
+
+        // Trigger light mobile haptic vibration if supported
+        if (navigator.vibrate) {
+            navigator.vibrate(20);
+        }
+
+        // Mark calculation state as complete
         isNewCalculation = true;
+
     } catch (e) {
+        // Catch any evaluation syntax errors safely
         display.value = 'Error';
-        triggerPulse();
+        if (typeof triggerPulse === 'function') {
+            triggerPulse();
+        }
+        isNewCalculation = true;
     }
 }
 
@@ -357,5 +496,62 @@ function convertLbsToKg() {
     if (display.value) {
         display.value = (parseFloat(eval(display.value)) / 2.20462).toFixed(2);
         triggerPulse();
+    }
+}
+
+// Auto-scroll display input to show the newest digits
+function scrollToLatest() {
+    const display = document.getElementById('display');
+    if (display) {
+        display.scrollLeft = display.scrollWidth;
+    }
+}
+// Toggle (+/-) sign of current display value or expression
+function toggleSign() {
+    const display = document.getElementById('display');
+    if (!display || !display.value) return;
+
+    let currentValue = display.value;
+
+    // Case 1: If current value is a simple positive or negative number
+    if (!isNaN(currentValue)) {
+        display.value = (parseFloat(currentValue) * -1).toString();
+        if (typeof scrollToLatest === 'function') scrollToLatest();
+        return;
+    }
+
+    // Case 2: If display contains an active expression, wrap or toggle the last operand
+    // Matches trailing decimal/integer number at the end of expression
+    const lastNumberRegex = /(-?\d*\.?\d+)$/;
+    const match = currentValue.match(lastNumberRegex);
+
+    if (match) {
+        const lastNum = match[0];
+        const startIndex = match.index;
+        const toggledNum = (parseFloat(lastNum) * -1).toString();
+
+        display.value = currentValue.substring(0, startIndex) + toggledNum;
+    } else {
+        // Fallback: If ending with an operator, append minus sign for negative entry
+        display.value += '-';
+    }
+
+    if (typeof scrollToLatest === 'function') scrollToLatest();
+}
+
+// Helper: Handle percentage calculations cleanly without decimal syntax errors
+function calculatePercentage() {
+    const display = document.getElementById('display');
+    if (!display || !display.value) return;
+
+    try {
+        let val = Function(`'use strict'; return (${display.value})`)();
+        if (typeof val === 'number' && !isNaN(val)) {
+            val = val / 100;
+            display.value = Math.round(val * 100000000) / 100000000;
+            if (typeof scrollToLatest === 'function') scrollToLatest();
+        }
+    } catch (e) {
+        display.value = 'Error';
     }
 }

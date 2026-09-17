@@ -78,8 +78,45 @@ function processVoiceCommand(text) {
         .replace(/multiply by/g, '*')
         .replace(/divided by/g, '/')
         .replace(/over/g, '/')
-        .replace(/equals/g, '')
+        .replace(/equals/g, '=')
         .replace(/x/g, '*');
+
+        const display = document.getElementById('display');
+    if (!display) return;
+
+    // Check if command ends with 'equals' or '='
+    const shouldCalculateFinal = expression.includes('=');
+    let cleanExpr = expression.replace(/[^0-9+\-*/().]/g, '');
+
+    if (!cleanExpr) return;
+
+    // Continuous evaluation on voice input
+    try {
+        let fullExpr = display.value + cleanExpr;
+        
+        if (shouldCalculateFinal) {
+            fullExpr = fullExpr.replace('=', '');
+            let finalAns = Function(`'use strict'; return (${fullExpr})`)();
+            finalAns = Math.round(finalAns * 100000000) / 100000000;
+
+            if (typeof addToHistory === 'function') addToHistory(fullExpr, finalAns);
+            display.value = finalAns;
+        } else {
+            // Live continuous step calculation
+            let result = Function(`'use strict'; return (${fullExpr})`)();
+            result = Math.round(result * 100000000) / 100000000;
+
+            if (typeof addToHistory === 'function') addToHistory(fullExpr, result);
+            display.value = result;
+        }
+
+        scrollToLatest(); // Auto-scroll to view continuous result
+    } catch (err) {
+        // Fallback: Append raw voice input and scroll
+        display.value += cleanExpr;
+        scrollToLatest();
+    }
+}
 
     // Parse "X days from now" if in Date Calculator tab
     const dateMatch = expression.match(/(\d+)\s*days/);
@@ -107,4 +144,60 @@ function processVoiceCommand(text) {
             console.error('Invalid math expression spoken:', cleanExpr);
         }
     }
+
+
+
+let calculationHistory = [];
+
+// Toggle Slide-out Drawer
+function toggleHistoryDrawer() {
+    const drawer = document.getElementById('historyDrawer');
+    drawer.classList.toggle('active');
 }
+
+// Save calculation to history list
+function addToHistory(expression, result) {
+    calculationHistory.unshift({ expression, result }); // Add to start of array
+    
+    // Keep max 20 history items
+    if (calculationHistory.length > 20) {
+        calculationHistory.pop();
+    }
+    
+    renderHistory();
+}
+
+// Render history items to the UI drawer
+function renderHistory() {
+    const listContainer = document.getElementById('historyList');
+    
+    if (calculationHistory.length === 0) {
+        listContainer.innerHTML = '<div class="history-empty">No history yet</div>';
+        return;
+    }
+
+    listContainer.innerHTML = calculationHistory.map((item, index) => `
+        <div class="history-item" onclick="recallHistory(${index})">
+            <div class="history-expr">${item.expression} =</div>
+            <div class="history-ans">${item.result}</div>
+        </div>
+    `).join('');
+}
+
+// Recall past result back to display
+function recallHistory(index) {
+    const item = calculationHistory[index];
+    const display = document.getElementById('display');
+    if (display && item) {
+        display.value = item.result;
+        isNewCalculation = true;
+        toggleHistoryDrawer(); // Close drawer on selection
+    }
+}
+
+// Clear all history items
+function clearHistory() {
+    calculationHistory = [];
+    renderHistory();
+}
+
