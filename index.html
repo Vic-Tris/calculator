@@ -235,14 +235,55 @@
                 <p style="margin-bottom: 12px; font-size: 0.85rem; color: #94a3b8;">
                     Live time across major world time zones.
                 </p>
+                <div class="date-picker-group city-search-group">
+                    <label for="clockCityInput">Find a city:</label>
+                    <input type="text" id="clockCityInput" list="clockCityOptions" placeholder="Type a city, e.g. Dubai" oninput="updateTypedCityTime()" autocomplete="off" />
+                    <datalist id="clockCityOptions">
+                        <option value="New York"></option>
+                        <option value="Los Angeles"></option>
+                        <option value="Chicago"></option>
+                        <option value="London"></option>
+                        <option value="Paris"></option>
+                        <option value="Dubai"></option>
+                        <option value="Delhi"></option>
+                        <option value="Singapore"></option>
+                        <option value="Tokyo"></option>
+                        <option value="Sydney"></option>
+                    </datalist>
+                    <span class="typed-city-result" id="typedCityResult" aria-live="polite">Type a city to see its local time.</span>
+                </div>
                 <div class="world-clock-grid">
                     <div class="clock-item">
                         <span class="city-name">New York (EST/EDT)</span>
-                        <span class="time-display" id="clock-ny">--:--:--</span>
+                        <span class="time-display" id="clock-new-york">--:--:--</span>
+                    </div>
+                    <div class="clock-item">
+                        <span class="city-name">Los Angeles (PST/PDT)</span>
+                        <span class="time-display" id="clock-los-angeles">--:--:--</span>
+                    </div>
+                    <div class="clock-item">
+                        <span class="city-name">Chicago (CST/CDT)</span>
+                        <span class="time-display" id="clock-chicago">--:--:--</span>
                     </div>
                     <div class="clock-item">
                         <span class="city-name">London (GMT/BST)</span>
                         <span class="time-display" id="clock-london">--:--:--</span>
+                    </div>
+                    <div class="clock-item">
+                        <span class="city-name">Paris (CET/CEST)</span>
+                        <span class="time-display" id="clock-paris">--:--:--</span>
+                    </div>
+                    <div class="clock-item">
+                        <span class="city-name">Dubai (GST)</span>
+                        <span class="time-display" id="clock-dubai">--:--:--</span>
+                    </div>
+                    <div class="clock-item">
+                        <span class="city-name">Delhi (IST)</span>
+                        <span class="time-display" id="clock-delhi">--:--:--</span>
+                    </div>
+                    <div class="clock-item">
+                        <span class="city-name">Singapore (SGT)</span>
+                        <span class="time-display" id="clock-singapore">--:--:--</span>
                     </div>
                     <div class="clock-item">
                         <span class="city-name">Tokyo (JST)</span>
@@ -269,17 +310,19 @@
     <!-- From Currency Selector -->
     <div class="date-picker-group">
         <label for="fromCurrency">From:</label>
-        <select id="fromCurrency" onchange="convertCurrency()" class="currency-select">
-            <option value="USD">USD - US Dollar</option>
-            <option value="EUR">EUR - Euro</option>
-            <option value="GBP">GBP - British Pound</option>
-            <option value="JPY">JPY - Japanese Yen</option>
-            <option value="CAD">CAD - Canadian Dollar</option>
-            <option value="AUD">AUD - Australian Dollar</option>
-            <option value="NGN">NGN - Nigerian Naira</option>
-            <option value="INR">INR - Indian Rupee</option>
-        </select>
+        <input type="text" id="fromCurrency" value="USD" list="currencyOptions" maxlength="3" oninput="scheduleCurrencyConversion()" class="currency-select" autocomplete="off" />
     </div>
+
+    <datalist id="currencyOptions">
+        <option value="USD">US Dollar</option>
+        <option value="EUR">Euro</option>
+        <option value="GBP">British Pound</option>
+        <option value="JPY">Japanese Yen</option>
+        <option value="CAD">Canadian Dollar</option>
+        <option value="AUD">Australian Dollar</option>
+        <option value="NGN">Nigerian Naira</option>
+        <option value="INR">Indian Rupee</option>
+    </datalist>
 
     <!-- Quick Swap Button -->
     <div style="text-align: center; margin: -4px 0 6px 0;">
@@ -289,16 +332,7 @@
     <!-- To Currency Selector -->
     <div class="date-picker-group">
         <label for="toCurrency">To:</label>
-        <select id="toCurrency" onchange="convertCurrency()" class="currency-select">
-            <option value="EUR">EUR - Euro</option>
-            <option value="USD" selected>USD - US Dollar</option>
-            <option value="GBP">GBP - British Pound</option>
-            <option value="JPY">JPY - Japanese Yen</option>
-            <option value="CAD">CAD - Canadian Dollar</option>
-            <option value="AUD">AUD - Australian Dollar</option>
-            <option value="NGN">NGN - Nigerian Naira</option>
-            <option value="INR">INR - Indian Rupee</option>
-        </select>
+        <input type="text" id="toCurrency" value="EUR" list="currencyOptions" maxlength="3" oninput="scheduleCurrencyConversion()" class="currency-select" autocomplete="off" />
     </div>
 
     <!-- Conversion Result Card -->

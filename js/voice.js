@@ -7,8 +7,10 @@ let recognition = null;
 let isListening = false;
 let shouldKeepListening = false;
 let silenceTimer = null;
+let microphoneStream = null;
 
 const voiceSilenceDelay = 2200;
+const minimumVoiceConfidence = 0.55;
 
 const SpeechRecognition =
     window.SpeechRecognition ||
@@ -25,6 +27,34 @@ function setVoiceStatus(message, state = 'ready') {
 
     status.textContent = message;
     status.dataset.state = state;
+}
+
+async function startNoiseSuppressedMicrophone() {
+    if (microphoneStream || !navigator.mediaDevices?.getUserMedia) return true;
+
+    try {
+        microphoneStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                channelCount: 1
+            }
+        });
+
+        return true;
+    } catch (error) {
+        console.warn('Could not enable microphone noise suppression:', error);
+        setVoiceStatus('Microphone permission is required for voice commands.', 'error');
+        return false;
+    }
+}
+
+function stopNoiseSuppressedMicrophone() {
+    if (!microphoneStream) return;
+
+    microphoneStream.getTracks().forEach(track => track.stop());
+    microphoneStream = null;
 }
 
 // ------------------------------------------------------------
@@ -83,7 +113,7 @@ function createRecognition() {
     const instance = new SpeechRecognition();
 
     instance.lang = 'en-US';
-    instance.continuous = true;
+    instance.continuous = false;
     instance.interimResults = true;
     instance.maxAlternatives = 3;
 
@@ -108,6 +138,14 @@ function createRecognition() {
             const result = event.results[i];
 
             if (!result || !result[0]) continue;
+
+            if (
+                result.isFinal &&
+                Number.isFinite(result[0].confidence) &&
+                result[0].confidence < minimumVoiceConfidence
+            ) {
+                continue;
+            }
 
             const transcript =
                 result[0].transcript.trim();
@@ -136,6 +174,7 @@ function createRecognition() {
         resetSilenceTimer();
 
         if (finalText) {
+            stopRecognition();
             processVoiceCommand(finalText);
         }
     };
@@ -162,12 +201,7 @@ function createRecognition() {
                 break;
 
             case 'no-speech':
-                if (shouldKeepListening) {
-                    setVoiceStatus(
-                        'No speech detected. Listening again...',
-                        'listening'
-                    );
-                }
+                stopRecognition();
                 break;
 
             case 'audio-capture':
@@ -261,6 +295,7 @@ function stopRecognition() {
     }
 
     isListening = false;
+    stopNoiseSuppressedMicrophone();
 
     setVoiceStatus(
         'Voice ready.',
@@ -272,7 +307,7 @@ function stopRecognition() {
 // Toggle Voice
 // ------------------------------------------------------------
 
-function toggleVoiceInput() {
+async function toggleVoiceInput() {
     if (!SpeechRecognition) {
         setVoiceStatus(
             'Voice recognition is not supported in this browser.',
@@ -286,6 +321,8 @@ function toggleVoiceInput() {
         stopRecognition();
         return;
     }
+
+    if (!await startNoiseSuppressedMicrophone()) return;
 
     shouldKeepListening = true;
 
@@ -306,11 +343,7 @@ function resetSilenceTimer() {
     if (!shouldKeepListening) return;
 
     silenceTimer = setTimeout(() => {
-        if (recognition && isListening) {
-            try {
-                recognition.stop();
-            } catch {}
-        }
+        stopRecognition();
     }, voiceSilenceDelay);
 }
 
@@ -756,6 +789,33 @@ function processVoiceCommand(rawText) {
     // --------------------------------------------------------
     // World clock
     // --------------------------------------------------------
+
+    const cityTimeMatch = text.match(
+        /^(?:what(?:'s| is)?\s+)?(?:the\s+)?time\s+(?:in|at)\s+(.+)$/
+    ) || text.match(
+        /^what\s+time\s+is\s+it\s+(?:in|at)\s+(.+)$/
+    );
+
+    if (cityTimeMatch && typeof getCityTime === 'function') {
+        const aliases = {
+            'new york city': 'new york',
+            'la': 'los angeles',
+            'los angeles city': 'los angeles',
+            'new delhi': 'delhi'
+        };
+        const requestedCity = cityTimeMatch[1].trim();
+        const city = aliases[requestedCity] || requestedCity;
+        const cityTime = getCityTime(city);
+
+        if (cityTime) {
+            openUtilityPopup('time');
+            speak(`The time in ${cityTime.city} is ${cityTime.time}.`);
+        } else {
+            speak(`I do not have a clock for ${requestedCity}.`);
+        }
+
+        return;
+    }
 
     if (
         text.includes('world clock') ||

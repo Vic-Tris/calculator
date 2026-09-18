@@ -167,11 +167,34 @@
     color-scheme: dark;
 }
 
+.city-search-group {
+    align-items: stretch;
+}
+
+.city-search-group input[type="text"] {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #38bdf8;
+    font-size: 1rem;
+    font-weight: 600;
+    outline: none;
+}
+
+.typed-city-result {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    min-height: 18px;
+}
+
 /* World Clock List */
 .world-clock-grid {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    max-height: 360px;
+    overflow-y: auto;
+    padding-right: 4px;
 }
 
 .clock-item {

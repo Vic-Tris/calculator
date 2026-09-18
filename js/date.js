@@ -4,6 +4,9 @@
 
 let clockTimer = null;
 let exchangeRatesCache = null;
+let cityLookupTimer = null;
+let cityLookupController = null;
+let currencyConversionTimer = null;
 
 // ------------------------------------------------------------
 // Popup
@@ -218,6 +221,117 @@ function swapDates() {
 // World Clock
 // ------------------------------------------------------------
 
+const worldClockTimeZones = {
+    'new york': 'America/New_York',
+    'los angeles': 'America/Los_Angeles',
+    chicago: 'America/Chicago',
+    london: 'Europe/London',
+    paris: 'Europe/Paris',
+    dubai: 'Asia/Dubai',
+    delhi: 'Asia/Kolkata',
+    singapore: 'Asia/Singapore',
+    tokyo: 'Asia/Tokyo',
+    sydney: 'Australia/Sydney'
+};
+
+const worldClockCityAliases = {
+    'new york city': 'new york',
+    nyc: 'new york',
+    la: 'los angeles',
+    'los angeles city': 'los angeles',
+    'new delhi': 'delhi'
+};
+
+function getCityTime(cityName) {
+    const typedCity = cityName.toLowerCase().trim();
+    const normalizedCity = worldClockCityAliases[typedCity] || typedCity;
+    const timeZone = worldClockTimeZones[normalizedCity];
+
+    if (!timeZone) return null;
+
+    return {
+        city: normalizedCity,
+        timeZone,
+        time: new Date().toLocaleTimeString('en-US', {
+            timeZone,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        })
+    };
+}
+
+function updateTypedCityTime() {
+    const input = document.getElementById('clockCityInput');
+    const result = document.getElementById('typedCityResult');
+
+    if (!input || !result) return;
+
+    const cityName = input.value.trim();
+
+    if (!cityName) {
+        result.textContent = 'Type a city to see its local time.';
+        return;
+    }
+
+    const cityTime = getCityTime(cityName);
+
+    if (cityTime) {
+        result.textContent = `${cityTime.city.replace(/\b\w/g, letter => letter.toUpperCase())}: ${cityTime.time}`;
+        return;
+    }
+
+    clearTimeout(cityLookupTimer);
+    cityLookupTimer = setTimeout(() => lookupCityTime(cityName), 450);
+    result.textContent = 'Searching live city data...';
+}
+
+async function lookupCityTime(cityName) {
+    const input = document.getElementById('clockCityInput');
+    const result = document.getElementById('typedCityResult');
+
+    if (!input || !result || input.value.trim() !== cityName) return;
+
+    if (cityLookupController) cityLookupController.abort();
+    cityLookupController = new AbortController();
+
+    try {
+        const searchResponse = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(cityName)}`,
+            { signal: cityLookupController.signal }
+        );
+        const locations = await searchResponse.json();
+
+        if (!locations.length) throw new Error('City not found');
+
+        const location = locations[0];
+        const timeResponse = await fetch(
+            `https://timeapi.io/api/Time/current/coordinate?latitude=${encodeURIComponent(location.lat)}&longitude=${encodeURIComponent(location.lon)}`,
+            { signal: cityLookupController.signal }
+        );
+        const timeData = await timeResponse.json();
+        const timeZone = timeData.timeZone;
+        const time = timeZone
+            ? new Date().toLocaleTimeString('en-US', {
+                timeZone,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            })
+            : timeData.time || timeData.dateTime;
+
+        if (!time) throw new Error('Time unavailable');
+
+        result.textContent = `${location.display_name.split(',')[0]}: ${time}`;
+    } catch (error) {
+        if (error.name === 'AbortError') return;
+        result.textContent = 'Live city data unavailable. Try again.';
+        console.error('City lookup error:', error);
+    }
+}
+
 function startWorldClock() {
     updateClocks();
 
@@ -234,31 +348,28 @@ function stopWorldClock() {
 }
 
 function updateClocks() {
-    const timeZones = {
-        'clock-ny': 'America/New_York',
-        'clock-london': 'Europe/London',
-        'clock-tokyo': 'Asia/Tokyo',
-        'clock-sydney': 'Australia/Sydney'
+    const clockElements = {
+        'clock-new-york': 'new york',
+        'clock-los-angeles': 'los angeles',
+        'clock-chicago': 'chicago',
+        'clock-london': 'london',
+        'clock-paris': 'paris',
+        'clock-dubai': 'dubai',
+        'clock-delhi': 'delhi',
+        'clock-singapore': 'singapore',
+        'clock-tokyo': 'tokyo',
+        'clock-sydney': 'sydney'
     };
 
-    const now = new Date();
-
-    Object.entries(timeZones).forEach(([id, timeZone]) => {
+    Object.entries(clockElements).forEach(([id, city]) => {
         const element = document.getElementById(id);
 
         if (!element) return;
 
         try {
-            element.textContent =
-                now.toLocaleTimeString('en-US', {
-                    timeZone,
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: true
-                });
+            element.textContent = getCityTime(city).time;
         } catch (error) {
-            console.error(`Clock error for ${timeZone}:`, error);
+            console.error(`Clock error for ${city}:`, error);
         }
     });
 }
@@ -304,6 +415,17 @@ function switchTab(tabId, btnElement) {
 // Currency Converter
 // ------------------------------------------------------------
 
+function scheduleCurrencyConversion() {
+    clearTimeout(currencyConversionTimer);
+
+    const resultMain = document.getElementById('currencyResultMain');
+    if (resultMain) resultMain.textContent = 'Waiting for currency code...';
+
+    currencyConversionTimer = setTimeout(() => {
+        convertCurrency();
+    }, 450);
+}
+
 async function convertCurrency() {
     const amountInput = document.getElementById('currencyAmount');
     const fromSelect = document.getElementById('fromCurrency');
@@ -323,8 +445,17 @@ async function convertCurrency() {
     }
 
     const amount = parseFloat(amountInput.value);
-    const from = fromSelect.value;
-    const to = toSelect.value;
+    const from = fromSelect.value.trim().toUpperCase();
+    const to = toSelect.value.trim().toUpperCase();
+
+    fromSelect.value = from;
+    toSelect.value = to;
+
+    if (!/^[A-Z]{3}$/.test(from) || !/^[A-Z]{3}$/.test(to)) {
+        resultMain.textContent = 'Enter 3-letter currency codes';
+        resultSub.textContent = '';
+        return;
+    }
 
     if (!Number.isFinite(amount) || amount <= 0) {
         resultMain.textContent = 'Enter a valid amount';
