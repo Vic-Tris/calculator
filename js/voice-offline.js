@@ -95,14 +95,17 @@
         if (!Recognition) return null;
         if (!onlineRecognition) {
             onlineRecognition = new Recognition();
-            onlineRecognition.continuous = true;
-            onlineRecognition.interimResults = true;
+            onlineRecognition.continuous = false;
+            onlineRecognition.interimResults = false;
             onlineRecognition.lang = 'en-US';
             onlineRecognition.onresult = event => {
-                for (let index = event.resultIndex; index < event.results.length; index += 1) {
-                    const result = event.results[index];
-                    showTranscript(result[0]?.transcript || '');
-                    if (result.isFinal) handleTranscript(result[0]?.transcript);
+                const result = event.results[event.resultIndex];
+                const transcript = result?.[0]?.transcript || '';
+                showTranscript(transcript);
+                if (result?.isFinal) {
+                    handleTranscript(transcript);
+                    onlineListening = false;
+                    setListeningState(false);
                 }
             };
             onlineRecognition.onerror = event => {
