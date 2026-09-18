@@ -1,85 +1,133 @@
+// ============================================================
+// DATE / TIME / CURRENCY UTILITIES - date.js
+// ============================================================
 
-// Opens the popup page instantly
+let clockTimer = null;
+let exchangeRatesCache = null;
+
+// ------------------------------------------------------------
+// Popup
+// ------------------------------------------------------------
+
 function openPopupPage() {
     const popup = document.getElementById('popupOverlay');
+
+    if (!popup) return;
+
     popup.classList.add('active');
+
+    // Default Age/Date Difference values
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+
+    const today = new Date().toISOString().split('T')[0];
+
+    if (startDate && !startDate.value) {
+        startDate.value = '2000-01-01';
+    }
+
+    if (endDate && !endDate.value) {
+        endDate.value = today;
+    }
+
+    calculateFutureDate();
+    calculateDateDifference();
 }
 
-// Redirects back to standard calculator
 function closePopupPage() {
     const popup = document.getElementById('popupOverlay');
-    popup.classList.remove('active');
+
+    if (popup) {
+        popup.classList.remove('active');
+    }
+
+    stopWorldClock();
 }
 
-// Calculate date when entering days into popup
+// ------------------------------------------------------------
+// Future Date Calculator
+// ------------------------------------------------------------
+
 function calculateFutureDate() {
-    const daysInput = document.getElementById('daysInput').value;
+    const daysInput = document.getElementById('daysInput');
     const resultMain = document.getElementById('resultMain');
     const resultSub = document.getElementById('resultSub');
 
+    if (!daysInput || !resultMain || !resultSub) return;
+
+    const rawValue = daysInput.value.trim();
+
     const today = new Date();
-    
-    // Display today's date in footer
+
     const todayFormatted = today.toLocaleDateString('en-US', {
-        weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
     });
+
     resultSub.textContent = `From Today: ${todayFormatted}`;
 
-    if (daysInput === '' || isNaN(daysInput)) {
+    if (rawValue === '' || !Number.isFinite(Number(rawValue))) {
         resultMain.textContent = 'Enter number of days';
         return;
     }
 
-    const daysCount = parseInt(daysInput, 10);
-    const targetDate = new Date();
-    
-    // Add/subtract days relative to current timestamp
-    targetDate.setDate(today.getDate() + daysCount);
+    const daysCount = parseInt(rawValue, 10);
 
-    // Format output date (e.g. "Thursday, Jan 14, 2027")
-    const options = { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' };
-    resultMain.textContent = targetDate.toLocaleDateString('en-US', options);
+    const targetDate = new Date(today);
+
+    targetDate.setDate(targetDate.getDate() + daysCount);
+
+    const options = {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    };
+
+    resultMain.textContent =
+        targetDate.toLocaleDateString('en-US', options);
 }
 
-// Auto-calculate on popup load
-function openPopupPage() {
-    const popup = document.getElementById('popupOverlay');
-    popup.classList.add('active');
-    calculateFutureDate(); // Refresh initial state
-}
+// ------------------------------------------------------------
+// Date Difference
+// ------------------------------------------------------------
 
-let clockTimer = null;
-
-// Tab Switching
-function switchTab(tabId, btnElement) {
-    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-
-    document.getElementById(tabId).classList.add('active');
-    btnElement.classList.add('active');
-
-    if (tabId === 'time-tab') {
-        startWorldClock();
-    } else {
-        stopWorldClock();
-    }
-}
-
-// Age & Date Difference Logic
 function calculateDateDifference() {
-    const startVal = document.getElementById('startDate').value;
-    const endVal = document.getElementById('endDate').value;
+    const startInput = document.getElementById('startDate');
+    const endInput = document.getElementById('endDate');
+
     const resultMain = document.getElementById('diffResultMain');
     const resultSub = document.getElementById('diffResultSub');
 
-    if (!startVal || !endVal) return;
+    if (!startInput || !endInput || !resultMain || !resultSub) {
+        return;
+    }
 
-    let start = new Date(startVal);
-    let end = new Date(endVal);
+    const startVal = startInput.value;
+    const endVal = endInput.value;
+
+    if (!startVal || !endVal) {
+        resultMain.textContent = 'Type or select both dates';
+        resultSub.textContent = 'Years, Months & Days';
+        return;
+    }
+
+    let start = new Date(`${startVal}T00:00:00`);
+    let end = new Date(`${endVal}T00:00:00`);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        resultMain.textContent = 'Invalid date';
+        resultSub.textContent = '';
+        return;
+    }
+
+    let reversed = false;
 
     if (start > end) {
-        // Swap if start is later than end
         [start, end] = [end, start];
+        reversed = true;
     }
 
     let years = end.getFullYear() - start.getFullYear();
@@ -88,23 +136,91 @@ function calculateDateDifference() {
 
     if (days < 0) {
         months--;
-        const prevMonth = new Date(end.getFullYear(), end.getMonth(), 0);
-        days += prevMonth.getDate();
+
+        const previousMonth = new Date(
+            end.getFullYear(),
+            end.getMonth(),
+            0
+        );
+
+        days += previousMonth.getDate();
     }
+
     if (months < 0) {
         years--;
         months += 12;
     }
 
-    const totalDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+    const totalDays = Math.round(
+        (end.getTime() - start.getTime()) /
+        (1000 * 60 * 60 * 24)
+    );
 
-    resultMain.textContent = `${years}y ${months}m ${days}d`;
-    resultSub.textContent = `Total duration: ${totalDays.toLocaleString()} days`;
+    const output = [];
+
+    if (years > 0) {
+        output.push(
+            `${years} ${years === 1 ? 'year' : 'years'}`
+        );
+    }
+
+    if (months > 0) {
+        output.push(
+            `${months} ${months === 1 ? 'month' : 'months'}`
+        );
+    }
+
+    if (days > 0 || output.length === 0) {
+        output.push(
+            `${days} ${days === 1 ? 'day' : 'days'}`
+        );
+    }
+
+    resultMain.textContent = output.join(', ');
+
+    resultSub.textContent =
+        `${reversed ? 'Reverse Difference' : 'Total duration'}: ` +
+        `${totalDays.toLocaleString()} days`;
 }
 
-// World Clock Live Updates
+// ------------------------------------------------------------
+// Today Shortcut
+// ------------------------------------------------------------
+
+function setToday(inputId) {
+    const input = document.getElementById(inputId);
+
+    if (!input) return;
+
+    input.value = new Date()
+        .toISOString()
+        .split('T')[0];
+
+    calculateDateDifference();
+}
+
+// ------------------------------------------------------------
+// Swap Dates
+// ------------------------------------------------------------
+
+function swapDates() {
+    const start = document.getElementById('startDate');
+    const end = document.getElementById('endDate');
+
+    if (!start || !end) return;
+
+    [start.value, end.value] = [end.value, start.value];
+
+    calculateDateDifference();
+}
+
+// ------------------------------------------------------------
+// World Clock
+// ------------------------------------------------------------
+
 function startWorldClock() {
     updateClocks();
+
     if (!clockTimer) {
         clockTimer = setInterval(updateClocks, 1000);
     }
@@ -126,180 +242,222 @@ function updateClocks() {
     };
 
     const now = new Date();
-    for (let id in timeZones) {
-        const timeStr = now.toLocaleTimeString('en-US', {
-            timeZone: timeZones[id],
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: true
-        });
-        const elem = document.getElementById(id);
-        if (elem) elem.textContent = timeStr;
-    }
+
+    Object.entries(timeZones).forEach(([id, timeZone]) => {
+        const element = document.getElementById(id);
+
+        if (!element) return;
+
+        try {
+            element.textContent =
+                now.toLocaleTimeString('en-US', {
+                    timeZone,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                });
+        } catch (error) {
+            console.error(`Clock error for ${timeZone}:`, error);
+        }
+    });
 }
 
-// Initialize default date inputs on popup launch
-function openPopupPage() {
-    const popup = document.getElementById('popupOverlay');
-    popup.classList.add('active');
+// ------------------------------------------------------------
+// Tab Switching
+// ------------------------------------------------------------
 
-    // Default dates for Age/Diff tab
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('startDate').value = '2000-01-01';
-    document.getElementById('endDate').value = today;
-    
-    calculateFutureDate();
-    calculateDateDifference();
-}
+function switchTab(tabId, btnElement) {
+    document
+        .querySelectorAll('.tab-content')
+        .forEach(tab => tab.classList.remove('active'));
 
-function closePopupPage() {
-    const popup = document.getElementById('popupOverlay');
-    popup.classList.remove('active');
-    stopWorldClock();
-}
-// Calculate difference dynamically on user typing or selecting dates
-function calculateDateDifference() {
-    const startVal = document.getElementById('startDate').value;
-    const endVal = document.getElementById('endDate').value;
-    const resultMain = document.getElementById('diffResultMain');
-    const resultSub = document.getElementById('diffResultSub');
+    document
+        .querySelectorAll('.tab-btn')
+        .forEach(btn => btn.classList.remove('active'));
 
-    // Return if either date is incomplete while typing
-    if (!startVal || !endVal) {
-        resultMain.textContent = 'Type or select both dates';
-        resultSub.textContent = 'Years, Months & Days';
+    const target = document.getElementById(tabId);
+
+    if (!target) {
+        console.warn(`Tab not found: ${tabId}`);
         return;
     }
 
-    let start = new Date(startVal);
-    let end = new Date(endVal);
+    target.classList.add('active');
 
-    // Swap ordering temporarily if start date is after end date
-    let isReversed = false;
-    if (start > end) {
-        [start, end] = [end, start];
-        isReversed = true;
+    if (btnElement) {
+        btnElement.classList.add('active');
     }
 
-    let years = end.getFullYear() - start.getFullYear();
-    let months = end.getMonth() - start.getMonth();
-    let days = end.getDate() - start.getDate();
-
-    // Adjust negative day balances
-    if (days < 0) {
-        months--;
-        const prevMonthLastDay = new Date(end.getFullYear(), end.getMonth(), 0).getDate();
-        days += prevMonthLastDay;
+    if (tabId === 'time-tab') {
+        startWorldClock();
+    } else {
+        stopWorldClock();
     }
 
-    // Adjust negative month balances
-    if (months < 0) {
-        years--;
-        months += 12;
+    if (tabId === 'currency-tab') {
+        convertCurrency();
     }
-
-    // Calculate total continuous day count
-    const totalDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
-
-    // Construct output string
-    let outputStr = [];
-    if (years > 0) outputStr.push(`${years} ${years === 1 ? 'year' : 'years'}`);
-    if (months > 0) outputStr.push(`${months} ${months === 1 ? 'month' : 'months'}`);
-    if (days > 0 || outputStr.length === 0) outputStr.push(`${days} ${days === 1 ? 'day' : 'days'}`);
-
-    resultMain.textContent = outputStr.join(', ');
-    resultSub.textContent = `${isReversed ? 'Reverse Difference' : 'Total duration'}: ${totalDays.toLocaleString()} days`;
 }
 
-// Shortcut: Set input date to Today
-function setToday(inputId) {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById(inputId).value = today;
-    calculateDateDifference();
-}
+// ------------------------------------------------------------
+// Currency Converter
+// ------------------------------------------------------------
 
-// Shortcut: Swap 'From' and 'To' inputs
-function swapDates() {
-    const startElem = document.getElementById('startDate');
-    const endElem = document.getElementById('endDate');
-    const temp = startElem.value;
-    startElem.value = endElem.value;
-    endElem.value = temp;
-    calculateDateDifference();
-}
-// Cache exchange rates locally to avoid redundant API network requests
-let exchangeRatesCache = null;
-
-// Fetch live currency rates and convert values
 async function convertCurrency() {
     const amountInput = document.getElementById('currencyAmount');
     const fromSelect = document.getElementById('fromCurrency');
     const toSelect = document.getElementById('toCurrency');
+
     const resultMain = document.getElementById('currencyResultMain');
     const resultSub = document.getElementById('currencyResultSub');
 
-    if (!amountInput || !fromSelect || !toSelect) return;
+    if (
+        !amountInput ||
+        !fromSelect ||
+        !toSelect ||
+        !resultMain ||
+        !resultSub
+    ) {
+        return;
+    }
 
     const amount = parseFloat(amountInput.value);
     const from = fromSelect.value;
     const to = toSelect.value;
 
-    if (isNaN(amount) || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
         resultMain.textContent = 'Enter a valid amount';
         resultSub.textContent = '';
         return;
     }
 
-    try {
-        // Fetch fresh rate matrix if not already cached
-        if (!exchangeRatesCache || exchangeRatesCache.base !== from) {
-            resultMain.textContent = 'Updating rates...';
-            const res = await fetch(`https://open.er-api.com/v6/latest/${from}`);
-            const data = await res.json();
+    if (from === to) {
+        resultMain.textContent =
+            `${amount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            })} ${to}`;
 
-            if (data.result === 'success') {
-                exchangeRatesCache = { base: from, rates: data.rates };
-            } else {
-                throw new Error('API Rate Error');
+        resultSub.textContent = `1 ${from} = 1.0000 ${to}`;
+
+        return;
+    }
+
+    try {
+        if (
+            !exchangeRatesCache ||
+            exchangeRatesCache.base !== from
+        ) {
+            resultMain.textContent = 'Updating rates...';
+
+            const response = await fetch(
+                `https://open.er-api.com/v6/latest/${encodeURIComponent(from)}`
+            );
+
+            if (!response.ok) {
+                throw new Error('Network request failed');
             }
+
+            const data = await response.json();
+
+            if (
+                data.result !== 'success' ||
+                !data.rates
+            ) {
+                throw new Error('Invalid exchange-rate response');
+            }
+
+            exchangeRatesCache = {
+                base: from,
+                rates: data.rates
+            };
         }
 
         const rate = exchangeRatesCache.rates[to];
-        if (rate) {
-            const converted = (amount * rate).toLocaleString(undefined, {
+
+        if (!Number.isFinite(rate)) {
+            throw new Error('Currency rate unavailable');
+        }
+
+        const converted = amount * rate;
+
+        resultMain.textContent =
+            `${converted.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
-            });
+            })} ${to}`;
 
-            resultMain.textContent = `${converted} ${to}`;
-            resultSub.textContent = `1 ${from} = ${rate.toFixed(4)} ${to}`;
-        }
+        resultSub.textContent =
+            `1 ${from} = ${rate.toFixed(4)} ${to}`;
+
     } catch (error) {
+        console.error('Currency conversion error:', error);
+
         resultMain.textContent = 'Offline / Error';
-        resultSub.textContent = 'Could not fetch current exchange rate';
+        resultSub.textContent =
+            'Could not fetch current exchange rate';
     }
 }
 
-// Swap From/To currencies and trigger immediate recalculation
+// ------------------------------------------------------------
+// Swap Currencies
+// ------------------------------------------------------------
+
 function swapCurrencies() {
     const fromSelect = document.getElementById('fromCurrency');
     const toSelect = document.getElementById('toCurrency');
 
-    const temp = fromSelect.value;
-    fromSelect.value = toSelect.value;
-    toSelect.value = temp;
+    if (!fromSelect || !toSelect) return;
 
-    // Reset cache base so fetch loads new base rate
+    [fromSelect.value, toSelect.value] =
+        [toSelect.value, fromSelect.value];
+
     exchangeRatesCache = null;
+
     convertCurrency();
 }
 
-// Automatically trigger conversion when switching to Currency Tab
-const originalSwitchTab = window.switchTab;
-window.switchTab = function(tabId, btnElement) {
-    if (typeof originalSwitchTab === 'function') originalSwitchTab(tabId, btnElement);
-    if (tabId === 'currency-tab') {
-        convertCurrency();
+// ------------------------------------------------------------
+// Dynamic Date Inputs
+// ------------------------------------------------------------
+
+document.addEventListener('DOMContentLoaded', () => {
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+    const daysInput = document.getElementById('daysInput');
+
+    if (startDate) {
+        startDate.addEventListener(
+            'input',
+            calculateDateDifference
+        );
+
+        startDate.addEventListener(
+            'change',
+            calculateDateDifference
+        );
     }
-};
+
+    if (endDate) {
+        endDate.addEventListener(
+            'input',
+            calculateDateDifference
+        );
+
+        endDate.addEventListener(
+            'change',
+            calculateDateDifference
+        );
+    }
+
+    if (daysInput) {
+        daysInput.addEventListener(
+            'input',
+            calculateFutureDate
+        );
+    }
+
+    calculateDateDifference();
+    calculateFutureDate();
+});
