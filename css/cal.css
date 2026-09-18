@@ -214,6 +214,28 @@
             direction: ltr;
             margin-bottom: 20px;
         }
+
+        .voice-feedback {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            min-height: 18px;
+            padding: 6px 4px 0;
+            color: #94a3b8;
+            font-size: 0.72rem;
+        }
+
+        #voiceStatus[data-state="listening"] { color: #fbbf24; }
+        #voiceStatus[data-state="speaking"] { color: #4ade80; }
+        #voiceStatus[data-state="offline"] { color: #38bdf8; }
+        #voiceStatus[data-state="error"], #voiceStatus[data-state="unavailable"] { color: #fca5a5; }
+
+        #voiceTranscript {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: right;
+        }
         .display-container::-webkit-scrollbar {
             display: none; /* Hide scrollbar for a cleaner look */
         }
