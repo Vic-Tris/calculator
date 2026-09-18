@@ -299,6 +299,7 @@ function calculate() {
 
         // Mark calculation state as complete
         isNewCalculation = true;
+        if (typeof speak === 'function') speak(`The answer is ${result}`);
 
     } catch (e) {
         // Catch any evaluation syntax errors safely
