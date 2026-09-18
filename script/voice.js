@@ -60,7 +60,20 @@ function processVoiceCommand(text) {
         return;
     }
     if (text.includes('world clock') || text.includes('time zone')) {
-        switchTab('time-tab', document.querySelectorAll('.tab-btn')[2]);
+        switchTab('time-tab', document.querySelectorAll('.tab-btn')[3]);
+        return;
+    }
+    if (text.includes('currency') || text.includes('exchange rate')) {
+        switchTab('currency-tab', document.querySelectorAll('.tab-btn')[2]);
+        return;
+    }
+
+    const dateMatch = text.match(/(\d+)\s*days?\s*(?:from now|ahead|from today)?/);
+    if (dateMatch) {
+        openPopupPage();
+        switchTab('date-tab', document.querySelectorAll('.tab-btn')[0]);
+        document.getElementById('daysInput').value = dateMatch[1];
+        calculateFutureDate();
         return;
     }
 
@@ -96,14 +109,14 @@ function processVoiceCommand(text) {
         
         if (shouldCalculateFinal) {
             fullExpr = fullExpr.replace('=', '');
-            let finalAns = Function(`'use strict'; return (${fullExpr})`)();
+            let finalAns = evaluateExpression(fullExpr);
             finalAns = Math.round(finalAns * 100000000) / 100000000;
 
             if (typeof addToHistory === 'function') addToHistory(fullExpr, finalAns);
             display.value = finalAns;
         } else {
             // Live continuous step calculation
-            let result = Function(`'use strict'; return (${fullExpr})`)();
+            let result = evaluateExpression(fullExpr);
             result = Math.round(result * 100000000) / 100000000;
 
             if (typeof addToHistory === 'function') addToHistory(fullExpr, result);
@@ -118,41 +131,14 @@ function processVoiceCommand(text) {
     }
 }
 
-    // Parse "X days from now" if in Date Calculator tab
-    const dateMatch = expression.match(/(\d+)\s*days/);
-    if (dateMatch && document.getElementById('daysInput')) {
-        openPopupPage();
-        document.getElementById('daysInput').value = dateMatch[1];
-        calculateFutureDate();
-        return;
-    }
-
-    // Sanitize to only keep numbers and math operators
-    const cleanExpr = expression.replace(/[^0-9+\-*/().]/g, '');
-
-    if (cleanExpr) {
-        try {
-            // Evaluate math safely and output result
-            const result = Function(`'use strict'; return (${cleanExpr})`)();
-            
-            // Assuming your calculator uses a display element with id "display"
-            const display = document.getElementById('display');
-            if (display) {
-                display.value = result;
-            }
-        } catch (err) {
-            console.error('Invalid math expression spoken:', cleanExpr);
-        }
-    }
-
-
-
 let calculationHistory = [];
 
 // Toggle Slide-out Drawer
 function toggleHistoryDrawer() {
     const drawer = document.getElementById('historyDrawer');
-    drawer.classList.toggle('active');
+    if (drawer) {
+        drawer.classList.toggle('active');
+    }
 }
 
 // Save calculation to history list
@@ -170,18 +156,33 @@ function addToHistory(expression, result) {
 // Render history items to the UI drawer
 function renderHistory() {
     const listContainer = document.getElementById('historyList');
-    
+    if (!listContainer) return;
+    listContainer.replaceChildren();
+
     if (calculationHistory.length === 0) {
-        listContainer.innerHTML = '<div class="history-empty">No history yet</div>';
+        const empty = document.createElement('div');
+        empty.className = 'history-empty';
+        empty.textContent = 'No history yet';
+        listContainer.appendChild(empty);
         return;
     }
 
-    listContainer.innerHTML = calculationHistory.map((item, index) => `
-        <div class="history-item" onclick="recallHistory(${index})">
-            <div class="history-expr">${item.expression} =</div>
-            <div class="history-ans">${item.result}</div>
-        </div>
-    `).join('');
+    calculationHistory.forEach((item, index) => {
+        const historyItem = document.createElement('button');
+        historyItem.type = 'button';
+        historyItem.className = 'history-item';
+        historyItem.addEventListener('click', () => recallHistory(index));
+
+        const expression = document.createElement('div');
+        expression.className = 'history-expr';
+        expression.textContent = `${item.expression} =`;
+        const answer = document.createElement('div');
+        answer.className = 'history-ans';
+        answer.textContent = String(item.result);
+
+        historyItem.append(expression, answer);
+        listContainer.appendChild(historyItem);
+    });
 }
 
 // Recall past result back to display

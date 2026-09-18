@@ -1,5 +1,88 @@
     const display = document.getElementById('display');
 
+    // Evaluate only the calculator grammar; never execute arbitrary JavaScript.
+    function evaluateExpression(expression) {
+        const tokens = [];
+        const tokenPattern = /\s*(?:(\d+(?:\.\d*)?|\.\d+)|([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)?)|(\*\*|[+\-*/%()]))/y;
+        let position = 0;
+        while (position < expression.length) {
+            tokenPattern.lastIndex = position;
+            const match = tokenPattern.exec(expression);
+            if (!match) throw new Error('Invalid expression');
+            tokens.push(match[1] !== undefined ? { type: 'number', value: Number(match[1]) } :
+                match[2] !== undefined ? { type: 'name', value: match[2] } :
+                { type: 'operator', value: match[3] });
+            position = tokenPattern.lastIndex;
+        }
+
+        let tokenIndex = 0;
+        const peek = () => tokens[tokenIndex];
+        const consume = (value) => {
+            if (peek()?.value !== value) throw new Error('Invalid expression');
+            tokenIndex++;
+        };
+        const parseExpression = () => {
+            let value = parseTerm();
+            while (peek()?.value === '+' || peek()?.value === '-') {
+                const operator = tokens[tokenIndex++].value;
+                const right = parseTerm();
+                value = operator === '+' ? value + right : value - right;
+            }
+            return value;
+        };
+        const parseTerm = () => {
+            let value = parsePower();
+            while (peek()?.value && '*/%'.includes(peek().value)) {
+                const operator = tokens[tokenIndex++].value;
+                const right = parsePower();
+                if (operator === '*') value *= right;
+                if (operator === '/') value /= right;
+                if (operator === '%') value %= right;
+            }
+            return value;
+        };
+        const parsePower = () => {
+            const value = parseUnary();
+            if (peek()?.value === '**') {
+                tokenIndex++;
+                return value ** parsePower();
+            }
+            return value;
+        };
+        const parseUnary = () => {
+            if (peek()?.value === '+') { tokenIndex++; return parseUnary(); }
+            if (peek()?.value === '-') { tokenIndex++; return -parseUnary(); }
+            return parsePrimary();
+        };
+        const functions = { sin, cos, tan, asin, acos, atan, log10, ln, sqrt, abs };
+        const parsePrimary = () => {
+            const token = peek();
+            if (!token) throw new Error('Invalid expression');
+            if (token.type === 'number') { tokenIndex++; return token.value; }
+            if (token.value === '(') {
+                tokenIndex++;
+                const value = parseExpression();
+                consume(')');
+                return value;
+            }
+            if (token.type === 'name') {
+                tokenIndex++;
+                if (token.value === 'Math.PI') return Math.PI;
+                if (token.value === 'Math.E') return Math.E;
+                if (!functions[token.value]) throw new Error('Unknown function');
+                consume('(');
+                const value = functions[token.value](parseExpression());
+                consume(')');
+                return value;
+            }
+            throw new Error('Invalid expression');
+        };
+
+        const result = parseExpression();
+        if (tokenIndex !== tokens.length || !Number.isFinite(result)) throw new Error('Invalid result');
+        return result;
+    }
+
     let lastOperator = null;
     let lastOperand = null;
     let isNewCalculation = false;
@@ -78,7 +161,7 @@ function appendValue(val) {
         // CONTINUOUS EVALUATION: Evaluate pending expression before chaining the new operator
         if (display.value && /[0-9)]/.test(lastChar)) {
             try {
-                let intermediate = Function(`'use strict'; return (${display.value})`)();
+                let intermediate = evaluateExpression(display.value);
                 
                 // Avoid displaying NaN or Infinity directly in continuous mode
                 if (Number.isFinite(intermediate)) {
@@ -130,7 +213,7 @@ function scrollToLatest() {
     function calculatePercentage() {
         try {
             if (display.value) {
-                display.value = eval(display.value) / 100;
+                display.value = evaluateExpression(display.value) / 100;
                 triggerPulse();
             }
         } catch (e) {
@@ -180,7 +263,7 @@ function calculate() {
         }
 
         // 3. Safely evaluate expression using Function constructor
-        let result = Function(`'use strict'; return (${sanitizedExpr})`)();
+        let result = evaluateExpression(sanitizedExpr);
 
         // 4. Handle Division by Zero, Infinity, and NaN errors
         if (typeof result !== 'number' || isNaN(result) || !isFinite(result)) {
@@ -230,7 +313,7 @@ function calculate() {
     function calculateSquareRoot() {
     try {
         if (display.value) {
-            const currentVal = eval(display.value);
+            const currentVal = evaluateExpression(display.value);
             if (currentVal < 0) {
                 display.value = 'Error';
             } else {
@@ -248,7 +331,7 @@ function calculate() {
         if (!display.value || display.value === 'Error') {
             throw new Error('Missing expression');
         }
-        return eval(display.value);
+        return evaluateExpression(display.value);
     }
 
     function calculateSquare() {
@@ -443,7 +526,7 @@ function appendMathFunc(funcName) {
 function calculateFactorial() {
     try {
         if (!display.value) return;
-        const num = eval(display.value);
+        const num = evaluateExpression(display.value);
         if (!Number.isInteger(num) || num < 0 || num > 170) throw new Error('Invalid factorial');
         let result = 1;
         for (let i = 2; i <= num; i++) result *= i;
@@ -459,42 +542,42 @@ function calculateFactorial() {
 // Converter Functions for Mode 3
 function convertCtoF() {
     if (display.value) {
-        display.value = (parseFloat(eval(display.value)) * 9/5 + 32).toFixed(2);
+        display.value = (evaluateExpression(display.value) * 9/5 + 32).toFixed(2);
         triggerPulse();
     }
 }
 
 function convertFtoC() {
     if (display.value) {
-        display.value = ((parseFloat(eval(display.value)) - 32) * 5/9).toFixed(2);
+        display.value = ((evaluateExpression(display.value) - 32) * 5/9).toFixed(2);
         triggerPulse();
     }
 }
 
 function convertKmToMiles() {
     if (display.value) {
-        display.value = (parseFloat(eval(display.value)) * 0.621371).toFixed(2);
+        display.value = (evaluateExpression(display.value) * 0.621371).toFixed(2);
         triggerPulse();
     }
 }
 
 function convertMilesToKm() {
     if (display.value) {
-        display.value = (parseFloat(eval(display.value)) / 0.621371).toFixed(2);
+        display.value = (evaluateExpression(display.value) / 0.621371).toFixed(2);
         triggerPulse();
     }
 }
 
 function convertKgToLbs() {
     if (display.value) {
-        display.value = (parseFloat(eval(display.value)) * 2.20462).toFixed(2);
+        display.value = (evaluateExpression(display.value) * 2.20462).toFixed(2);
         triggerPulse();
     }
 }
 
 function convertLbsToKg() {
     if (display.value) {
-        display.value = (parseFloat(eval(display.value)) / 2.20462).toFixed(2);
+        display.value = (evaluateExpression(display.value) / 2.20462).toFixed(2);
         triggerPulse();
     }
 }
@@ -545,7 +628,7 @@ function calculatePercentage() {
     if (!display || !display.value) return;
 
     try {
-        let val = Function(`'use strict'; return (${display.value})`)();
+        let val = evaluateExpression(display.value);
         if (typeof val === 'number' && !isNaN(val)) {
             val = val / 100;
             display.value = Math.round(val * 100000000) / 100000000;

@@ -297,8 +297,8 @@ function swapCurrencies() {
 
 // Automatically trigger conversion when switching to Currency Tab
 const originalSwitchTab = window.switchTab;
-window.switchTab = function(tabId) {
-    if (typeof originalSwitchTab === 'function') originalSwitchTab(tabId);
+window.switchTab = function(tabId, btnElement) {
+    if (typeof originalSwitchTab === 'function') originalSwitchTab(tabId, btnElement);
     if (tabId === 'currency-tab') {
         convertCurrency();
     }
