@@ -7,6 +7,7 @@ const voiceSilenceDelay = 1500;
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+// Helper to update status badge on UI
 function setVoiceStatus(message, state = 'ready') {
     const status = document.getElementById('voiceStatus');
     if (status) {
@@ -15,40 +16,69 @@ function setVoiceStatus(message, state = 'ready') {
     }
 }
 
+// Text-to-Speech Output Handler
 function speak(message) {
     if (!('speechSynthesis' in window)) return;
+    
+    // Pause active recognition while speaking to prevent microphone loopback
+    if (recognition && isListening) {
+        try { recognition.stop(); } catch (e) {}
+    }
+
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(String(message));
     utterance.lang = 'en-US';
     utterance.rate = 1;
+
     utterance.onstart = () => setVoiceStatus('Speaking', 'speaking');
-    utterance.onend = () => setVoiceStatus(isListening ? 'Listening' : 'Voice ready', isListening ? 'listening' : 'ready');
+    utterance.onend = () => {
+        setVoiceStatus(shouldKeepListening ? 'Listening' : 'Voice ready', shouldKeepListening ? 'listening' : 'ready');
+        if (shouldKeepListening && recognition) {
+            try { recognition.start(); } catch (e) {}
+        }
+    };
+
     window.speechSynthesis.speak(utterance);
 }
 
+// Toggle Microphone Input On/Off
 function toggleVoiceInput() {
     if (!SpeechRecognition) {
         setVoiceStatus('Microphone unavailable', 'unavailable');
         speak('Speech recognition is not available in this browser.');
         return;
     }
+
+    if (!recognition) {
+        createRecognition();
+    }
+
     if (isListening) {
         shouldKeepListening = false;
         recognition.stop();
         return;
     }
+
     shouldKeepListening = true;
-    recognition.start();
+    try {
+        recognition.start();
+    } catch (e) {
+        /* Handles quick double-tap restarts */
+    }
 }
 
+// Silence Timeout Reset
 function resetSilenceTimer() {
     window.clearTimeout(silenceTimer);
     silenceTimer = window.setTimeout(() => {
         shouldKeepListening = false;
-        if (recognition && isListening) recognition.stop();
+        if (recognition && isListening) {
+            recognition.stop();
+        }
     }, voiceSilenceDelay);
 }
 
+// Speech Recognition Lifecycle
 function createRecognition() {
     if (!SpeechRecognition) return;
     recognition = new SpeechRecognition();
@@ -62,33 +92,45 @@ function createRecognition() {
         setVoiceStatus('Listening', 'listening');
         resetSilenceTimer();
     };
+
     recognition.onresult = event => {
         const result = event.results[event.results.length - 1];
         const transcript = result[0].transcript.trim();
         const transcriptElement = document.getElementById('voiceTranscript');
-        if (transcriptElement) transcriptElement.textContent = transcript;
+        
+        if (transcriptElement) {
+            transcriptElement.textContent = transcript;
+        }
+
         resetSilenceTimer();
-        if (result.isFinal) processVoiceCommand(transcript);
+        if (result.isFinal) {
+            processVoiceCommand(transcript);
+        }
     };
+
     recognition.onerror = event => {
         isListening = false;
         setVoiceStatus(event.error === 'not-allowed' ? 'Microphone permission denied' : 'Voice error', 'error');
     };
+
     recognition.onend = () => {
         isListening = false;
         window.clearTimeout(silenceTimer);
-        if (shouldKeepListening) {
+
+        // Resume if continuous mode active and TTS is not currently speaking
+        if (shouldKeepListening && !window.speechSynthesis.speaking) {
             window.setTimeout(() => {
                 if (shouldKeepListening && !isListening) {
-                    try { recognition.start(); } catch (error) { /* Recognition is already restarting. */ }
+                    try { recognition.start(); } catch (error) {}
                 }
             }, 100);
-        } else {
+        } else if (!window.speechSynthesis.speaking) {
             setVoiceStatus('Voice ready', 'ready');
         }
     };
 }
 
+// Number Words Dictionary & Converter
 const numberWords = {
     zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
     eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
@@ -104,11 +146,12 @@ function replaceNumberWords(text) {
     });
 }
 
+// Wrap Voice Completion
 function finishVoiceOperation(message) {
     const display = document.getElementById('display');
     const result = display && display.value;
     if (result && result !== 'Error') {
-        isNewCalculation = true;
+        if (typeof isNewCalculation !== 'undefined') isNewCalculation = true;
         if (typeof scrollToLatest === 'function') scrollToLatest();
         if (typeof triggerPulse === 'function') triggerPulse();
         speak(message ? `${message} ${result}` : `The answer is ${result}`);
@@ -126,74 +169,111 @@ function runVoiceOperation(operation, message) {
     }
 }
 
+// Main Command Processor
 function processVoiceCommand(rawText) {
     const commandId = ++voiceCommandId;
     let text = rawText.toLowerCase().replace(/[^a-z0-9.=+\-*/ ]/g, ' ').replace(/\s+/g, ' ').trim();
     text = replaceNumberWords(text);
     const sayResult = message => { if (commandId === voiceCommandId) speak(message); };
 
+    // Tool Navigation Commands
     if (text.includes('open settings') || text.includes('open tools') || text.includes('open pop up')) {
-        openPopupPage(); sayResult('Tools opened'); return;
+        if (typeof openPopupPage === 'function') openPopupPage();
+        sayResult('Tools opened');
+        return;
     }
     if (text === 'close' || text.includes('back to calculator')) {
-        closePopupPage(); sayResult('Calculator ready'); return;
+        if (typeof closePopupPage === 'function') closePopupPage();
+        sayResult('Calculator ready');
+        return;
     }
     if (text.includes('days ahead') || text.includes('tab one')) {
-        switchTab('date-tab', document.querySelectorAll('.tab-btn')[0]); sayResult('Days ahead calculator opened'); return;
+        if (typeof switchTab === 'function') switchTab('date-tab', document.querySelectorAll('.tab-btn')[0]);
+        sayResult('Days ahead calculator opened');
+        return;
     }
     if (text.includes('age') || text.includes('date difference')) {
-        switchTab('age-tab', document.querySelectorAll('.tab-btn')[1]); sayResult('Age calculator opened'); return;
+        if (typeof switchTab === 'function') switchTab('age-tab', document.querySelectorAll('.tab-btn')[1]);
+        sayResult('Age calculator opened');
+        return;
     }
     if (text.includes('world clock') || text.includes('time zone')) {
-        switchTab('time-tab', document.querySelectorAll('.tab-btn')[3]); sayResult('World clock opened'); return;
+        if (typeof switchTab === 'function') switchTab('time-tab', document.querySelectorAll('.tab-btn')[3]);
+        sayResult('World clock opened');
+        return;
     }
     if (text.includes('currency') || text.includes('exchange rate')) {
-        switchTab('currency-tab', document.querySelectorAll('.tab-btn')[2]); sayResult('Currency converter opened'); return;
+        if (typeof switchTab === 'function') switchTab('currency-tab', document.querySelectorAll('.tab-btn')[2]);
+        sayResult('Currency converter opened');
+        return;
     }
 
+    // Days-ahead Date Math Voice Command
     const dateMatch = text.match(/(\d+)\s*days?\s*(?:from now|ahead|from today)?/);
     if (dateMatch) {
-        openPopupPage();
-        switchTab('date-tab', document.querySelectorAll('.tab-btn')[0]);
-        document.getElementById('daysInput').value = dateMatch[1];
-        calculateFutureDate();
+        if (typeof openPopupPage === 'function') openPopupPage();
+        if (typeof switchTab === 'function') switchTab('date-tab', document.querySelectorAll('.tab-btn')[0]);
+        const daysInput = document.getElementById('daysInput');
+        if (daysInput) daysInput.value = dateMatch[1];
+        if (typeof calculateFutureDate === 'function') calculateFutureDate();
         sayResult(`The date is calculated for ${dateMatch[1]} days from today`);
         return;
     }
+
+    // Standard Calculator State Controls
     if (text.includes('clear') || text.includes('reset')) {
-        clearDisplay(); sayResult('Cleared'); return;
+        if (typeof clearDisplay === 'function') clearDisplay();
+        sayResult('Cleared');
+        return;
     }
     if (text.includes('delete') || text.includes('backspace')) {
-        deleteLast(); sayResult('Deleted'); return;
+        if (typeof deleteLast === 'function') deleteLast();
+        sayResult('Deleted');
+        return;
     }
     if (text.includes('change sign') || text.includes('toggle sign')) {
-        toggleSign(); finishVoiceOperation('The value is'); return;
+        if (typeof toggleSign === 'function') toggleSign();
+        finishVoiceOperation('The value is');
+        return;
     }
 
+    // Mode Switching Commands
     if (text.includes('standard mode') || text.includes('standard calculator')) {
-        while (currentMode !== 1) nextMode();
-        sayResult('Standard mode selected'); return;
+        if (typeof nextMode === 'function') {
+            while (typeof currentMode !== 'undefined' && currentMode !== 1) nextMode();
+        }
+        sayResult('Standard mode selected');
+        return;
     }
     if (text.includes('scientific mode') || text.includes('scientific calculator')) {
-        while (currentMode !== 2) nextMode();
-        sayResult('Scientific mode selected'); return;
+        if (typeof nextMode === 'function') {
+            while (typeof currentMode !== 'undefined' && currentMode !== 2) nextMode();
+        }
+        sayResult('Scientific mode selected');
+        return;
     }
     if (text.includes('converter mode') || text.includes('conversion mode')) {
-        while (currentMode !== 3) nextMode();
-        sayResult('Converter mode selected'); return;
+        if (typeof nextMode === 'function') {
+            while (typeof currentMode !== 'undefined' && currentMode !== 3) nextMode();
+        }
+        sayResult('Converter mode selected');
+        return;
     }
     if (text.includes('degrees') || text.includes('radians')) {
         const angleMode = document.getElementById('angle-mode');
         const wantsDegrees = text.includes('degrees');
         if (angleMode && ((wantsDegrees && angleMode.textContent !== 'DEG') || (!wantsDegrees && angleMode.textContent !== 'RAD'))) {
-            toggleAngleMode();
+            if (typeof toggleAngleMode === 'function') toggleAngleMode();
         }
-        sayResult(wantsDegrees ? 'Degrees selected' : 'Radians selected'); return;
+        sayResult(wantsDegrees ? 'Degrees selected' : 'Radians selected');
+        return;
     }
 
+    // Scientific Direct Calculations
     const operationMatch = text.match(/^(?:calculate|compute|what is)?\s*(?:the\s+)?(.+?)\s*(?:to|of)?\s*(-?[\d.]+)\s*(?:degrees?)?$/);
     const operationText = operationMatch ? operationMatch[1].trim() : text;
     const operationValue = operationMatch ? operationMatch[2] : null;
+
     const operationPatterns = [
         { pattern: /square root|sqrt/, run: value => appendAndCalculate(value, calculateSquareRoot), message: 'The square root is' },
         { pattern: /square|squared/, run: value => appendAndCalculate(value, calculateSquare), message: 'The square is' },
@@ -211,6 +291,7 @@ function processVoiceCommand(rawText) {
         { pattern: /absolute value|absolute/, run: value => appendMathAndCalculate('abs', value), message: 'The absolute value is' },
         { pattern: /percent|percentage/, run: value => appendAndCalculate(value, calculatePercentage), message: 'The percentage is' }
     ];
+
     if (operationValue) {
         const operation = operationPatterns.find(item => item.pattern.test(operationText));
         if (operation) {
@@ -219,53 +300,61 @@ function processVoiceCommand(rawText) {
         }
     }
 
+    // Percentage Calculation
     const percentMatch = text.match(/^(?:calculate|compute|what is)?\s*(-?[\d.]+)\s*(?:percent|percentage)$/);
     if (percentMatch) {
         runVoiceOperation(() => appendAndCalculate(percentMatch[1], calculatePercentage), 'The percentage is');
         return;
     }
 
+    // Single Word Suffix Operations (e.g. "5 squared")
     const valueFirstMatch = text.match(/^(?:calculate|compute|what is)?\s*(-?[\d.]+)\s+(square|squared|cube|cubed|factorial)$/);
     if (valueFirstMatch) {
-        const operation = {
+        const operationMap = {
             square: calculateSquare,
             squared: calculateSquare,
             cube: calculateCube,
             cubed: calculateCube,
             factorial: calculateFactorial
-        }[valueFirstMatch[2]];
+        };
+        const operation = operationMap[valueFirstMatch[2]];
         const operationName = valueFirstMatch[2] === 'squared' ? 'square' : valueFirstMatch[2] === 'cubed' ? 'cube' : valueFirstMatch[2];
         runVoiceOperation(() => appendAndCalculate(valueFirstMatch[1], operation), `The ${operationName} is`);
         return;
     }
 
+    // Power Operations (e.g. "2 to the power of 8")
     const powerMatch = text.match(/^(?:calculate|compute|what is)?\s*(-?[\d.]+)\s+(?:to the power(?: of)?|raised to(?: the power(?: of)?)?|power)\s+(-?[\d.]+)$/);
     if (powerMatch) {
         runVoiceOperation(() => {
             const expression = `${powerMatch[1]}**${powerMatch[2]}`;
             const result = Math.round(evaluateExpression(expression) * 100000000) / 100000000;
-            document.getElementById('display').value = String(result);
+            const display = document.getElementById('display');
+            if (display) display.value = String(result);
             if (typeof addToHistory === 'function') addToHistory(expression, result);
         }, 'The power result is');
         return;
     }
 
+    // Reciprocal (e.g. "1 over 4")
     const reciprocalMatch = text.match(/^(?:calculate|compute|what is)?\s*(?:one over|1 over)\s+(-?[\d.]+)$/);
     if (reciprocalMatch) {
         runVoiceOperation(() => appendAndCalculate(reciprocalMatch[1], calculateReciprocal), 'The reciprocal is');
         return;
     }
 
+    // Unit Conversions
     const conversionPatterns = [
-        { pattern: /celsius.*fahrenheit|degrees? c.*degrees? f|c to f/, run: convertCtoF, message: 'The Fahrenheit value is' },
-        { pattern: /fahrenheit.*celsius|degrees? f.*degrees? c|f to c/, run: convertFtoC, message: 'The Celsius value is' },
-        { pattern: /kilometers?.*miles?|km to miles?/, run: convertKmToMiles, message: 'The miles value is' },
-        { pattern: /miles?.*kilometers?|miles? to km/, run: convertMilesToKm, message: 'The kilometers value is' },
-        { pattern: /kilograms?.*pounds?|kg to lbs?/, run: convertKgToLbs, message: 'The pounds value is' },
-        { pattern: /pounds?.*kilograms?|lbs? to kg/, run: convertLbsToKg, message: 'The kilograms value is' }
+        { pattern: /celsius.*fahrenheit|degrees? c.*degrees? f|c to f/, run: typeof convertCtoF === 'function' ? convertCtoF : null, message: 'The Fahrenheit value is' },
+        { pattern: /fahrenheit.*celsius|degrees? f.*degrees? c|f to c/, run: typeof convertFtoC === 'function' ? convertFtoC : null, message: 'The Celsius value is' },
+        { pattern: /kilometers?.*miles?|km to miles?/, run: typeof convertKmToMiles === 'function' ? convertKmToMiles : null, message: 'The miles value is' },
+        { pattern: /miles?.*kilometers?|miles? to km/, run: typeof convertMilesToKm === 'function' ? convertMilesToKm : null, message: 'The kilometers value is' },
+        { pattern: /kilograms?.*pounds?|kg to lbs?/, run: typeof convertKgToLbs === 'function' ? convertKgToLbs : null, message: 'The pounds value is' },
+        { pattern: /pounds?.*kilograms?|lbs? to kg/, run: typeof convertLbsToKg === 'function' ? convertLbsToKg : null, message: 'The kilograms value is' }
     ];
+
     const conversion = conversionPatterns.find(item => item.pattern.test(text));
-    if (conversion) {
+    if (conversion && conversion.run) {
         const valueMatch = text.match(/-?\d+(?:\.\d+)?/);
         if (valueMatch) {
             runVoiceOperation(() => appendAndCalculate(valueMatch[0], conversion.run), conversion.message);
@@ -273,6 +362,7 @@ function processVoiceCommand(rawText) {
         }
     }
 
+    // Standard Math Expressions (e.g., "5 plus 3 times 2")
     const expression = replaceNumberWords(text)
         .replace(/multiply by|multiplied by|times|x/g, '*')
         .replace(/divided by|divide by|over/g, '/')
@@ -280,37 +370,51 @@ function processVoiceCommand(rawText) {
         .replace(/minus/g, '-')
         .replace(/equals?|is equal to/g, '=')
         .replace(/what is|what's|calculate|compute/g, '');
+
     const cleanExpr = expression.replace(/[^0-9+\-*/().=]/g, '').replace(/=/g, '');
-    if (!cleanExpr) { sayResult('I did not hear a calculation'); return; }
+    if (!cleanExpr) {
+        sayResult('I did not hear a calculation');
+        return;
+    }
 
     const display = document.getElementById('display');
     try {
         const result = Math.round(evaluateExpression(cleanExpr) * 100000000) / 100000000;
-        display.value = String(result);
-        isNewCalculation = true;
+        if (display) display.value = String(result);
+        if (typeof isNewCalculation !== 'undefined') isNewCalculation = true;
         if (typeof addToHistory === 'function') addToHistory(cleanExpr, result);
         if (typeof scrollToLatest === 'function') scrollToLatest();
         if (typeof triggerPulse === 'function') triggerPulse();
         sayResult(`The answer is ${result}`);
     } catch (error) {
-        display.value = cleanExpr;
+        if (display) display.value = cleanExpr;
         sayResult('I need a complete calculation');
     }
 }
 
+// Execution Helper Wrappers
 function appendAndCalculate(value, operation) {
     const display = document.getElementById('display');
-    display.value = value;
-    operation();
+    if (display) display.value = value;
+    if (typeof operation === 'function') operation();
 }
 
 function appendMathAndCalculate(functionName, value) {
     const display = document.getElementById('display');
     const expression = `${functionName}(${value})`;
-    const result = Math.round(evaluateExpression(expression) * 100000000) / 100000000;
-    display.value = String(result);
-    if (typeof addToHistory === 'function') addToHistory(expression, result);
+    try {
+        const result = Math.round(evaluateExpression(expression) * 100000000) / 100000000;
+        if (display) display.value = String(result);
+        if (typeof addToHistory === 'function') addToHistory(expression, result);
+    } catch (e) {
+        if (display) display.value = 'Error';
+    }
 }
+
+// Initialize speech recognition instance when document is ready
+document.addEventListener('DOMContentLoaded', () => {
+    createRecognition();
+});
 
 createRecognition();
 
